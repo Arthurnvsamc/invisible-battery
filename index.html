@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Virtual Drum Snare</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+</head>
+<body>
+  <h1>Virtual Snare Drum</h1>
+  <video id="video" autoplay></video>
+  <audio id="snare-sound" src="https://www.myinstants.com/media/sounds/snare.mp3"></audio>
+
+  <script>
+    const video = document.getElementById('video');
+    const snareSound = document.getElementById('snare-sound');
+    
+    let lastRightWristY = null; // Posição anterior da mão para detecção de movimento
+    
+    async function setupCamera() {
+      video.width = 640;
+      video.height = 480;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true
+      });
+      video.srcObject = stream;
+      
+      return new Promise(resolve => {
+        video.onloadedmetadata = () => resolve(video);
+      });
+    }
+    
+    async function loadPoseNet() {
+      return await posenet.load();
+    }
+    
+    async function detectPose(net) {
+      const pose = await net.estimateSinglePose(video, {
+        flipHorizontal: false
+      });
+      
+      if (pose) {
+        const rightWrist = pose.keypoints.find(point => point.part === "rightWrist");
+
+        if (rightWrist && rightWrist.score > 0.5) {
+          const currentY = rightWrist.position.y;
+
+          if (lastRightWristY !== null) {
+            // Verifica se a mão se moveu rápido o suficiente em direção ao "tocar a bateria"
+            if (lastRightWristY - currentY > 40) { 
+              snareSound.currentTime = 0;
+              snareSound.play();
+            }
+          }
+
+          lastRightWristY = currentY; // Atualiza a última posição da mão
+        }
+      }
+      
+      requestAnimationFrame(() => detectPose(net));
+    }
+    
+    async function main() {
+      await setupCamera();
+      const net = await loadPoseNet();
+      detectPose(net);
+    }
+    
+    main();
+  </script>
+</body>
+</html>
